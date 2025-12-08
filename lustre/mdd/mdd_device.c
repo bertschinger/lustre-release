@@ -123,7 +123,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	ENTRY;
 
 	/* LU-8040 Set defaults here, before values configs */
-	mdd->mdd_cl.mc_flags = 0; /* off by default */
+	atomic_set(&mdd->mdd_cl.mc_flags, 0); /* off by default */
 	/* per-server mask is set via parameters if needed */
 	mdd->mdd_cl.mc_proc_mask = CHANGELOG_MINMASK;
 	/* current mask is calculated from mask above and users masks */
@@ -465,19 +465,20 @@ static int
 mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd)
 {
 	int rc = 0;
+	int flags;
 
-	if ((mdd->mdd_cl.mc_flags & CLM_ON) != 0)
+	flags = atomic_read(&mdd->mdd_cl.mc_flags);
+
+	if ((flags & CLM_ON) != 0)
 		return rc;
 
 	LCONSOLE_INFO("%s: changelog on\n", mdd2obd_dev(mdd)->obd_name);
-	if (mdd->mdd_cl.mc_flags & CLM_ERR) {
+	if (flags & CLM_ERR) {
 		CERROR("Changelogs cannot be enabled due to error condition (see %s log).\n",
 		       mdd2obd_dev(mdd)->obd_name);
 		rc = -ESRCH;
 	} else {
-		spin_lock(&mdd->mdd_cl.mc_lock);
-		mdd->mdd_cl.mc_flags |= CLM_ON;
-		spin_unlock(&mdd->mdd_cl.mc_lock);
+		atomic_or(CLM_ON, &mdd->mdd_cl.mc_flags);
 		rc = mdd_changelog_write_header(env, mdd, CLM_START);
 	}
 	return rc;
@@ -488,14 +489,12 @@ mdd_changelog_off(const struct lu_env *env, struct mdd_device *mdd)
 {
 	int rc = 0;
 
-	if ((mdd->mdd_cl.mc_flags & CLM_ON) != CLM_ON)
+	if ((atomic_read(&mdd->mdd_cl.mc_flags) & CLM_ON) != CLM_ON)
 		return rc;
 
 	LCONSOLE_INFO("%s: changelog off\n", mdd2obd_dev(mdd)->obd_name);
 	rc = mdd_changelog_write_header(env, mdd, CLM_FINI);
-	spin_lock(&mdd->mdd_cl.mc_lock);
-	mdd->mdd_cl.mc_flags &= ~CLM_ON;
-	spin_unlock(&mdd->mdd_cl.mc_lock);
+	atomic_and(~CLM_ON, &mdd->mdd_cl.mc_flags);
 
 	return rc;
 }
@@ -670,7 +669,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	if (rc) {
 		CERROR("%s: changelog setup during init failed: rc = %d\n",
 		       obd->obd_name, rc);
-		mdd->mdd_cl.mc_flags |= CLM_ERR;
+		atomic_or(CLM_ERR, &mdd->mdd_cl.mc_flags);
 	}
 
 	return rc;
@@ -682,9 +681,9 @@ static void mdd_changelog_fini(const struct lu_env *env,
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	struct llog_ctxt	*ctxt;
 
-	if (mdd->mdd_cl.mc_flags & CLM_CLEANUP_DONE)
+	if (atomic_read(&mdd->mdd_cl.mc_flags) & CLM_CLEANUP_DONE)
 		return;
-	mdd->mdd_cl.mc_flags = CLM_CLEANUP_DONE;
+	atomic_set(&mdd->mdd_cl.mc_flags, CLM_CLEANUP_DONE);
 
 again:
 	/* stop GC-thread if running */
@@ -814,7 +813,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	rec->cr.cr_namelen = len;
 	memcpy(changelog_rec_name(&rec->cr), obd->obd_name, rec->cr.cr_namelen);
 	/* Status and action flags */
-	rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+	rec->cr.cr_markerflags = atomic_read(&mdd->mdd_cl.mc_flags) | markerflags;
 	rec->cr_hdr.lrh_len = llog_data_len(changelog_rec_size(&rec->cr) +
 					    rec->cr.cr_namelen);
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;

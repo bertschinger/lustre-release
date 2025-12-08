@@ -201,7 +201,7 @@ int mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
 	 * requiring a new journal transaction to be started when current
 	 * could never complete (LU-10680).
 	 */
-	if (unlikely(mdd->mdd_cl.mc_flags & CLM_ON &&
+	if (unlikely(atomic_read(&mdd->mdd_cl.mc_flags) & CLM_ON &&
 		     cmpxchg(&mdd->mdd_cl.mc_gc_task, MDD_CHLG_GC_NEED,
 			     MDD_CHLG_GC_START) == MDD_CHLG_GC_NEED)) {
 		/* XXX we may want to cmpxchg() only if MDD_CHLG_GC_NEED
