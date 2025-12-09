@@ -1150,7 +1150,7 @@ static int mdd_attr_set_changelog(const struct lu_env *env,
 	bits |= (valid & LA_MTIME) ? BIT(CL_MTIME) : 0;
 	bits |= (valid & LA_CTIME) ? BIT(CL_CTIME) : 0;
 	bits |= (valid & LA_ATIME) ? BIT(CL_ATIME) : 0;
-	bits = bits & mdd->mdd_cl.mc_current_mask;
+	bits = bits & atomic_read(&mdd->mdd_cl.mc_current_mask);
 	/* This is an implementation limit rather than a protocol limit */
 	BUILD_BUG_ON(CL_LAST > sizeof(int) * 8);
 	if (bits == 0)
@@ -3765,7 +3765,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
 	rc = mdd_open_sanity_check(env, mdd_obj, attr, open_flags,
 				   spec->no_create);
-	if ((rc == -EACCES) && (mdd->mdd_cl.mc_current_mask & BIT(CL_DN_OPEN)))
+	if ((rc == -EACCES) && (atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(CL_DN_OPEN)))
 		type = CL_DN_OPEN;
 	else if (rc != 0)
 		GOTO(out, rc);
@@ -4015,10 +4015,10 @@ out:
 	 * this is not a big deal if we have a CL_CLOSE entry with no matching
 	 * CL_OPEN. Plus Changelogs mask may not change often.
 	 */
-	if (((!(mdd->mdd_cl.mc_current_mask & BIT(CL_OPEN)) &&
+	if (((!(atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(CL_OPEN)) &&
 	      (open_flags & (MDS_FMODE_WRITE | MDS_OPEN_APPEND |
 			     MDS_OPEN_TRUNC))) ||
-	     ((mdd->mdd_cl.mc_current_mask & BIT(CL_OPEN)) &&
+	     ((atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(CL_OPEN)) &&
 	      last_close_by_uid)) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
 		if (handle == NULL) {

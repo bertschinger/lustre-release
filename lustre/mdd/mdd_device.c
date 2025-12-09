@@ -127,7 +127,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* per-server mask is set via parameters if needed */
 	mdd->mdd_cl.mc_proc_mask = CHANGELOG_MINMASK;
 	/* current mask is calculated from mask above and users masks */
-	mdd->mdd_cl.mc_current_mask = CHANGELOG_MINMASK;
+	atomic_set(&mdd->mdd_cl.mc_current_mask, CHANGELOG_MINMASK);
 	mdd->mdd_cl.mc_deniednext = 60; /* 60 secs by default */
 	mdd->mdd_cl.mc_enable_shard_pfid = false; /* master pFID by default */
 
@@ -265,9 +265,9 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
 	mdd->mdd_cl.mc_users++;
 	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 && rec->cur_mask)
-		mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
+		atomic_or(rec->cur_mask, &mdd->mdd_cl.mc_current_mask);
 	else if (mdd->mdd_cl.mc_proc_mask == CHANGELOG_MINMASK)
-		mdd->mdd_cl.mc_current_mask |= CHANGELOG_DEFMASK;
+		atomic_or(CHANGELOG_DEFMASK, &mdd->mdd_cl.mc_current_mask);
 	mdd->mdd_cl.mc_mintime = min(mdd->mdd_cl.mc_mintime, rec->cur_time);
 	mdd->mdd_cl.mc_minrec = min(mdd->mdd_cl.mc_minrec, rec->cur_endrec);
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
@@ -584,7 +584,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	}
 
 	/* Finally apply per-server mask */
-	mdd->mdd_cl.mc_current_mask |= mdd->mdd_cl.mc_proc_mask;
+	atomic_or(mdd->mdd_cl.mc_proc_mask, &mdd->mdd_cl.mc_current_mask);
 
 	/* If we have registered users, assume we want changelogs on */
 	if (mdd->mdd_cl.mc_lastuser > 0) {
@@ -797,7 +797,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 
 	ENTRY;
 
-	if (mdd->mdd_cl.mc_current_mask & BIT(CL_MARK)) {
+	if (atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(CL_MARK)) {
 		mdd->mdd_cl.mc_starttime = ktime_get();
 		RETURN(0);
 	}
@@ -1836,9 +1836,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	}
 
 	/* apply user mask finally */
-	spin_lock(&mdd->mdd_cl.mc_user_lock);
-	mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
-	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	atomic_or(rec->cur_mask, &mdd->mdd_cl.mc_current_mask);
 
 	CDEBUG(D_IOCTL, "%s: registered changelog user '%s', mask %#x\n",
 	       mdd2obd_dev(mdd)->obd_name, user_name, rec->cur_mask);
@@ -1912,12 +1910,10 @@ int mdd_changelog_recalc_mask(const struct lu_env *env, struct mdd_device *mdd)
 		CWARN("%s: failed user changelog processing: rc = %d\n",
 		      mdd2obd_dev(mdd)->obd_name, rc);
 
-	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	CDEBUG(D_INFO, "%s: recalc changelog mask: %#x -> %#x\n",
-	       mdd2obd_dev(mdd)->obd_name, mdd->mdd_cl.mc_current_mask,
+	       mdd2obd_dev(mdd)->obd_name, atomic_read(&mdd->mdd_cl.mc_current_mask),
 	       mcrm.mcrm_mask);
-	mdd->mdd_cl.mc_current_mask = mcrm.mcrm_mask;
-	spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	atomic_set(&mdd->mdd_cl.mc_current_mask, mcrm.mcrm_mask);
 
 	EXIT;
 out:

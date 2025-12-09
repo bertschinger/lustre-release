@@ -68,7 +68,7 @@ static int mdd_changelog_current_mask_seq_show(struct seq_file *m, void *data)
 	int i = 0;
 
 	while (i < CL_LAST) {
-		if (mdd->mdd_cl.mc_current_mask & BIT(i))
+		if (atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(i))
 			seq_printf(m, "%s ", changelog_type2str(i));
 		i++;
 	}
@@ -139,9 +139,7 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	 * should be recalculated through all user masks.
 	 */
 	if (oldmask != CHANGELOG_MINMASK && (newmask & oldmask) == oldmask) {
-		spin_lock(&mdd->mdd_cl.mc_user_lock);
-		mdd->mdd_cl.mc_current_mask |= newmask;
-		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+		atomic_or(newmask, &mdd->mdd_cl.mc_current_mask);
 	} else {
 		struct lu_env env;
 

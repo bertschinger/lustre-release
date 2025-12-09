@@ -78,7 +78,7 @@ struct mdd_changelog {
 	spinlock_t		mc_lock;	/* for index */
 	atomic_t		mc_flags;
 	__u32			mc_proc_mask; /* per-server mask set via parameters */
-	__u32			mc_current_mask; /* combined global+users */
+	atomic_t		mc_current_mask; /* combined global+users */
 	__u32			mc_mintime; /* the oldest changelog user time */
 	__u64			mc_minrec; /* last known minimal used index */
 	__u64			mc_index;
@@ -889,7 +889,7 @@ static inline bool mdd_changelog_enabled(const struct lu_env *env,
 	const struct lu_ucred *uc;
 
 	if ((atomic_read(&mdd->mdd_cl.mc_flags) & CLM_ON) &&
-	    (mdd->mdd_cl.mc_current_mask & BIT(type))) {
+	    (atomic_read(&mdd->mdd_cl.mc_current_mask) & BIT(type))) {
 		uc = lu_ucred_check(env);
 
 		return uc != NULL ? uc->uc_enable_audit : true;
