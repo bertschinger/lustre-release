@@ -277,7 +277,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
 		mdd->mdd_cl.mc_index = rec->cur_endrec;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
-	return LLOG_PROC_BREAK;
+	return 0;
 }
 
 struct changelog_orphan_data {
