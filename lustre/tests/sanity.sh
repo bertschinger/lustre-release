@@ -21103,6 +21103,42 @@ test_160u() { # LU-17400
 }
 run_test 160u "changelog rename record type name and sname strings are correct"
 
+test_160v() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	changelog_register --user test_160v_mkdir -m mkdir ||
+		error "mkdir changelog_register failed"
+
+	changelog_register --user test_160v_creat -m creat ||
+		error "creat changelog_register failed"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "cannot start mds1"
+
+	local mask=$(do_facet mds1 $LCTL get_param mdd.$FSNAME-MDT0000.changelog_current_mask)
+
+	[[ "$mask" =~ "MKDIR" ]] ||
+		error "changelog mask should contain MKDIR"
+
+	[[ "$mask" =~ "CREAT" ]] ||
+		error "changelog mask should contain CREAT"
+
+	changelog_clear 0 || error "changelog_clear failed"
+
+	local dir="$DIR/$tdir"
+	mkdir $dir || error "mkdir failed"
+	touch $dir/testfile || error "touch failed"
+
+	local records=$(changelog_dump)
+
+	[[ "$records" =~ "MKDIR" ]] ||
+		error "changelog should include MKDIR record"
+	[[ "$records" =~ "CREAT" ]] ||
+		error "changelog should include CREAT record"
+}
+run_test 160v "load multiple changelog users after remount"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
