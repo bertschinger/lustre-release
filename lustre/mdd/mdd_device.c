@@ -261,7 +261,8 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	       PLOGID(&llh->lgh_id));
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
-	mdd->mdd_cl.mc_lastuser = rec->cur_id;
+	if (rec->cur_id > mdd->mdd_cl.mc_lastuser)
+		mdd->mdd_cl.mc_lastuser = rec->cur_id;
 	mdd->mdd_cl.mc_users++;
 	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 && rec->cur_mask)
 		mdd->mdd_cl.mc_current_mask |= rec->cur_mask;
@@ -275,7 +276,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
 		mdd->mdd_cl.mc_index = rec->cur_endrec;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
-	return LLOG_PROC_BREAK;
+	return 0;
 }
 
 struct changelog_orphan_data {

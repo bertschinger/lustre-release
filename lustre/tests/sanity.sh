@@ -23762,6 +23762,67 @@ test_160y() {
 }
 run_test 160y "lfs changelog --user for a user registered without a mask"
 
+test_160z() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MDS >= 2.17.60 for changelog user fix"
+
+	changelog_register --user ${TESTNAME}_mkdir -m mkdir ||
+		error "mkdir changelog_register failed"
+
+	changelog_register --user ${TESTNAME}_creat -m creat ||
+		error "creat changelog_register failed"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "cannot start mds1"
+
+	local mask=$(do_facet mds1 $LCTL \
+		get_param mdd.$FSNAME-MDT0000.changelog_current_mask)
+	local expected='=MARK CREAT MKDIR $'
+	[[ $mask =~ $expected ]] ||
+		error "mask '$mask' should contain only MKDIR and CREAT"
+
+	changelog_clear 0 || error "changelog_clear failed"
+
+	local dir="$DIR/$tdir"
+	mkdir_on_mdt0 $dir || error "mkdir failed"
+	touch $dir/$tfile || error "touch failed"
+
+	local records=$(changelog_dump)
+
+	[[ "$records" =~ "MKDIR" ]] ||
+		error "changelog should include MKDIR record"
+	[[ "$records" =~ "CREAT" ]] ||
+		error "changelog should include CREAT record"
+
+	# Register a new user to test that IDs are not re-used after restarting
+	# the MDT.
+	changelog_register --user ${TESTNAME}_third ||
+		error "new changelog_register failed"
+
+	local -a users
+	local user
+	local cur_id
+	local last_id=0
+
+	read -r -a users <<< "${CL_USERS[mds1]}"
+	for user in "${users[@]}"; do
+		# Extract the numeric ID, e.g., "cl3-foo" => "3".
+		cur_id=${user%%-*}
+		cur_id=${cur_id#cl}
+
+		# Compare the current ID to the previous one; it should have
+		# increased.
+		(( cur_id > last_id )) ||
+			error "user '$user' ID is not greater than $last_id"
+		last_id=$cur_id
+	done
+}
+run_test 160z "load multiple changelog users after remount"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
