@@ -1,4 +1,4 @@
-.TH LLAPI_FID2PATH_AT 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_FID2PATH_AT 3 2026-10-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_fid2path_at \- resolve a File Identifier to a pathname
 .SH SYNOPSIS
@@ -10,22 +10,73 @@ llapi_fid2path_at \- resolve a File Identifier to a pathname
 .fi
 .SH DESCRIPTION
 .BR llapi_fid2path_at()
-stores the pathname corresponding to the given File Identifier into
+stores the pathname corresponding to the given File Identifier
+.I fid
+into
 .IR path .
+.I pathlen
+is the size of
+.IR path ,
+including the NUL terminator.
 The lookup is performed relative to the filesystem referenced by
 .IR mnt_fd .
 If
-.I recno
-or
 .I linkno
-are non-NULL, they are used to select and return a specific directory entry or
-hardlink of the FID.
+is non-NULL, it is used to select and return a specific hardlink of the FID.
+Links are counted starting at 0.
+On success, if another hardlink exists after the returned hardlink,
+the value pointed to by
+.I linkno
+is incremented.
+If no more hardlinks exist,
+.RI * linkno
+is left unchanged.
+If
+.I linkno
+is NULL, the first link is returned.
+The
+.I recno
+parameter is currently ignored, and the value it points to (if non-NULL) is left unchanged.
 .SH RETURN VALUES
 Returns 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
 .B -ENOMEM
 Not enough memory to process the request.
+.TP
+.B -ERANGE
+.I path
+is not big enough to hold the returned path.
+.SH EXAMPLES
+To print all of the hardlinks for a file:
+.PP
+.EX
+#include <stdio.h>
+#include <string.h>
+#include <lustre/lustreapi.h>
+
+void print_paths(int mount_fd, struct lu_fid fid)
+{
+	int linkno = 0;
+	int linktmp;
+	int rc;
+
+	do {
+		char path[4096] = { 0 };
+
+		linktmp = linkno;
+
+		rc = llapi_fid2path_at(mount_fd, &fid, path, sizeof(path),
+		                       NULL, &linkno);
+		if (rc) {
+			fprintf(stderr, "llapi_fid2path_at(): %s\\n", strerror(-rc));
+			return;
+		}
+
+		printf("%s\\n", path);
+	} while (linktmp != linkno);
+}
+.EE
 .SH AVAILABILITY
 .B llapi_fid2path_at()
 is part of the
