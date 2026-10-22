@@ -1,4 +1,4 @@
-.TH LLAPI_FID2PATH 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_FID2PATH 3 2026-10-26 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_fid2path \- translate a File Identifier to a pathname
 .SH SYNOPSIS
@@ -13,6 +13,9 @@ llapi_fid2path \- translate a File Identifier to a pathname
 stores the pathname corresponding to the given File Identifier into
 .IR path .
 The resulting pathname may then be used like any other file or directory path.
+See
+.BR llapi_fid2path_at (3)
+for more detail on this API.
 .SH RETURN VALUES
 Returns 0 on success or a negative errno value on failure.
 .SH ERRORS
@@ -21,7 +24,11 @@ Returns 0 on success or a negative errno value on failure.
 An invalid argument was specified.
 .TP
 .B -ERANGE
-Contains numeric values that exceed valid values for a component.
+An invalid FID was passed in
+.IR fidstr ,
+or
+.I path
+is not big enough to hold the returned path.
 .TP
 .B -ENOMEM
 Not enough memory to process the request.
