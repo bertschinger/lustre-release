@@ -162,3 +162,23 @@ ifeq ($(LUSTRE_EMBED_BTF),yes)
 	$(SHELL) config/embed-btf.sh . "$(LINUX_OBJ)" "$(LINUXRELEASE)"
 endif
 __default: utils $(LUSTRE_MODULES_MT) $(SUBDIRS)
+
+#
+# When building kernel modules, explicitly add the Kbuild clean target as a
+# prerequisite for make clean, distclean, and maintainer-clean.
+#
+
+ifneq ($(LUSTRE_MODULES_MT),)
+.PHONY: clean-modules
+clean-modules:
+	$(MAKE) -C "$(LUSTRE_LINUX_OBJ)" M="$(CURDIR)" clean
+ifneq ($(LUSTRE_EXTERNAL_KO2IBLND_NT),)
+	$(MAKE) BUILD_EXT_O2IB=yes -C "$(LUSTRE_LINUX_OBJ)" M="$(CURDIR)/lnet/klnds/o2iblnd" clean
+endif
+
+clean: clean-modules
+
+# These dependencies ensure that kernel modules are removed during
+# autotools-generated targets like 'distclean' and 'maintainer-clean'.
+clean-recursive distclean-recursive maintainer-clean-recursive: clean-modules
+endif
